@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,6 +22,8 @@ namespace AsyncExample
     /// </summary>
     public partial class MainWindow : Window
     {
+        System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -28,98 +31,42 @@ namespace AsyncExample
 
         private void executeSync_Click(object sender, RoutedEventArgs e)
         {
-            var watch = System.Diagnostics.Stopwatch.StartNew();
+            resultsWindow.Text = "";
+            stopwatch.Restart();
 
-            RunDownloadSync();
-
-            watch.Stop();
-            var elapsedMs = watch.ElapsedMilliseconds;
-
-            resultsWindow.Text += $"Total execution time: { elapsedMs }";
+            Progress<ProgressModel> progress = new Progress<ProgressModel>();
+            progress.ProgressChanged += Progress_ProgressChanged;
+            DemoModel.RunDownloadSync(progress);
         }
 
         private async void executeAsync_Click(object sender, RoutedEventArgs e)
         {
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-
-            await RunDownloadParallelAsync();
-
-            watch.Stop();
-            var elapsedMs = watch.ElapsedMilliseconds;
-
-            resultsWindow.Text += $"Total execution time: { elapsedMs }";
-        }
-
-        private List<string> PrepData()
-        {
-            List<string> output = new List<string>();
-
+            executeAsync.IsEnabled = false;
             resultsWindow.Text = "";
+            stopwatch.Restart();
 
-            output.Add("https://www.yahoo.com");
-            output.Add("https://www.google.com");
-            output.Add("https://www.microsoft.com");
-            output.Add("https://www.cnn.com");
-            output.Add("https://www.codeproject.com");
-            output.Add("https://www.stackoverflow.com");
 
-            return output;
+            Progress<ProgressModel> progress = new Progress<ProgressModel>();
+            progress.ProgressChanged += Progress_ProgressChanged;
+            await DemoModel.RunDownloadParallel(progress);
+
+
+            executeAsync.IsEnabled = true;
+
         }
 
-        private async Task RunDownloadParallelAsync()
+        private void Progress_ProgressChanged(object sender, ProgressModel e)
         {
-            List<string> websites = PrepData();
-            List<Task<WebsiteDataModel>> tasks = new List<Task<WebsiteDataModel>>();
+            progrBar.Value = e.Progess;
+            resultsWindow.Text += e.WebSiteStatus;
 
-            foreach (string site in websites)
+            if (progrBar.Value == 100)
             {
-                tasks.Add(DownloadWebsiteAsync(site));
+                stopwatch.Stop();
+                var elapsedMs = stopwatch.ElapsedMilliseconds;
+                resultsWindow.Text += $"Total execution time: { elapsedMs }";
             }
 
-            var results = await Task.WhenAll(tasks);
-
-            foreach (var item in results)
-            {
-                ReportWebsiteInfo(item);
-            }
-        }
-
-        private void RunDownloadSync()
-        {
-            List<string> websites = PrepData();
-
-            foreach (string site in websites)
-            {
-                WebsiteDataModel results = DownloadWebsite(site);
-                ReportWebsiteInfo(results);
-            }
-        }
-
-        private WebsiteDataModel DownloadWebsite(string websiteURL)
-        {
-            WebsiteDataModel output = new WebsiteDataModel();
-            WebClient client = new WebClient();
-
-            output.WebsiteUrl = websiteURL;
-            output.WebsiteData = client.DownloadString(websiteURL);
-
-            return output;
-        }
-
-        private async Task<WebsiteDataModel> DownloadWebsiteAsync(string websiteURL)
-        {
-            WebsiteDataModel output = new WebsiteDataModel();
-            WebClient client = new WebClient();
-
-            output.WebsiteUrl = websiteURL;
-
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-            output.WebsiteData = await client.DownloadStringTaskAsync(websiteURL);
-
-            watch.Stop();
-            output.time_ms = watch.ElapsedMilliseconds;
-
-            return output;
         }
 
         private void ReportWebsiteInfo(WebsiteDataModel data)
